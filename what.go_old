@@ -1,0 +1,335 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"image/color"
+	"log"
+	"strconv"
+	"time"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/widget"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+)
+var ctx = context.TODO()
+var url1 = options.Client().ApplyURI("mongodb://localhost:27017")
+var users *mongo.Collection
+var users_fees *mongo.Collection
+func init() {
+    client, _ := mongo.Connect(ctx, url1)
+    users = client.Database("student").Collection("users")
+    users_fees = client.Database("student").Collection("fees")
+}
+type MUser struct {
+    Id           string `json:"_id" bson:"_id"`
+    StudentName  string `json:"student_name" bson:"student_name"`
+    StudentClass string `json:"student_class" bson:"student_class"`
+}
+type MUser_fees struct {
+    Id                string `json:"_id" bson:"_id"`
+    StudentId         string `json:"student_id" bson:"student_id"`
+    StudentName       string `json:"student_name" bson:"student_name"`
+    StudentClass      string `json:"student_class" bson:"student_class"`
+    StudentFeesYear   string `json:"student_fees_year" bson:"student_fees_year"`
+    StudentFeesMonth  string `json:"student_fees_month" bson:"student_fees_month"`
+    StudentFeesDate   string `json:"student_fees_date" bson:"student_fees_date"`
+    StudentFeesAmount string `json:"student_fees_amount" bson:"student_fees_amount"`
+}
+type DUser_fees struct {
+    Id                primitive.ObjectID `json:"_id" bson:"_id"`
+    StudentName       string             `json:"student_name" bson:"student_name"`
+    StudentClass      string             `json:"student_class" bson:"student_class"`
+    StudentId         string             `json:"student_id" bson:"student_id"`
+    StudentFeesYear   string             `json:"student_fees_year" bson:"student_fees_year"`
+    StudentFeesMonth  string             `json:"student_fees_month" bson:"student_fees_month"`
+    StudentFeesDate   string             `json:"student_fees_date" bson:"student_fees_date"`
+    StudentFeesAmount string             `json:"student_fees_amount" bson:"student_fees_amount"`
+}
+var t = time.Now().Local()
+func main() {
+    a := app.New()
+    w := a.NewWindow("My app")
+    w.Resize(fyne.NewSize(400, 400))
+    label := widget.NewLabel("School Management System")
+    label.Alignment = fyne.TextAlignCenter
+    student_name := widget.NewEntry()
+    student_name.PlaceHolder = "Enter Student Name"
+    student_class := widget.NewEntry()
+    student_class.PlaceHolder = "Enter Class"
+    btn2_enter_student_data := widget.NewButton("Enter", func() {
+        result, _ := users.InsertOne(
+            ctx, bson.D{
+                {"student_name", student_name.Text},
+                {"student_class", student_class.Text},
+            })
+        fmt.Println(result)
+    })
+    c := container.NewVBox(label, student_name, student_class, btn2_enter_student_data)
+    dlg := dialog.NewCustom("School Management System", "I want to search students", c, w)
+    dlg.Resize(fyne.NewSize(350, 350))
+    dlg.Show()
+    student_search := widget.NewEntry()
+    student_search.PlaceHolder = "Search Student Name"
+    student_search.Move(fyne.NewPos(10, 50))
+    student_search.Resize(fyne.NewSize(200, 40))
+    label_name := widget.NewLabel("")
+    label_name.Move(fyne.NewPos(10, 100))
+    label_name.Resize(fyne.NewSize(300, 40))
+    label_name.Alignment = fyne.TextAlignTrailing
+    label_class := widget.NewLabel("")
+    label_class.Move(fyne.NewPos(10, 150))
+    label_class.Resize(fyne.NewSize(300, 40))
+    label_class.Alignment = fyne.TextAlignTrailing
+    btn1 := widget.NewButton("Search", func() {
+        var user MUser
+        users.FindOne(ctx, bson.D{{"student_name", student_search.Text}}).Decode(&user)
+        //filter := bson.D{{"name", "pi"}}
+        fmt.Println(user)
+        if user.Id == "" {
+            label_name.Text = "No Record Found.."
+            label_name.Resize(fyne.NewSize(200, 40))
+            label_name.Refresh()
+        } else {
+            label_name.Text = "" + user.StudentName
+            label_name.Refresh()
+            label_class.Text = "" + user.StudentClass
+            label_class.Refresh()
+        }
+    })
+    btn1.Move(fyne.NewPos(250, 50))
+    btn1.Resize(fyne.NewSize(100, 40))
+    ///////////////////
+    line := canvas.NewLine(color.RGBA{R: 255, G: 0, B: 0, A: 255})
+    line.Position1 = fyne.NewPos(10, 100)
+    line.Position2 = fyne.NewPos(390, 100)
+    line.StrokeWidth = 2
+    line2 := canvas.NewLine(color.RGBA{R: 255, G: 0, B: 0, A: 255})
+    line2.Position1 = fyne.NewPos(10, 140)
+    line2.Position2 = fyne.NewPos(390, 140)
+    line2.StrokeWidth = 2
+    line3 := canvas.NewLine(color.RGBA{R: 255, G: 0, B: 0, A: 255})
+    line3.Position1 = fyne.NewPos(10, 190)
+    line3.Position2 = fyne.NewPos(390, 190)
+    line3.StrokeWidth = 2
+    ////////////////////////////
+    label_namex1 := widget.NewLabel("Name:")
+    label_namex1.Move(fyne.NewPos(10, 100))
+    label_namex1.Resize(fyne.NewSize(200, 40))
+    label_namex1.Alignment = fyne.TextAlignLeading
+    label_classx1 := widget.NewLabel("Class: ")
+    label_classx1.Move(fyne.NewPos(10, 150))
+    label_classx1.Resize(fyne.NewSize(200, 40))
+    label_classx1.Alignment = fyne.TextAlignLeading
+    ///////////////////
+    //select options
+    years := func() []string {
+        var s []string
+        for i := 2022; i <= 2049; i++ {
+            is := fmt.Sprintf("%d year", i)
+            s = append(s, is)
+        }
+        return s
+    }
+    selecty := widget.NewSelect(years(), func(s string) {
+        fmt.Println(s)
+    })
+    selecty.PlaceHolder = "year"
+    // select month
+    months := func() []string {
+        var s = []string{"jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"}
+        return s
+    }
+    select_month := widget.NewSelect(months(), func(s string) {
+        fmt.Println(s)
+    })
+    select_month.PlaceHolder = "month"
+    btnOK := widget.NewButton("OK", func() {
+        if selecty.SelectedIndex() == -1 {
+            selecty.SetSelectedIndex(t.Year() - 2022)
+        }
+        if select_month.SelectedIndex() == -1 {
+            select_month.SetSelectedIndex(int(t.Month()))
+        }
+        fmt.Printf("%s month index=%d\n", selecty.Selected, selecty.SelectedIndex())
+        fmt.Printf("%s year index=%d\n", select_month.Selected, select_month.SelectedIndex())
+    })
+    hbox := container.New(layout.NewHBoxLayout(), selecty, select_month, btnOK)
+    hbox.Move(fyne.NewPos(70, 200))
+    hbox.Resize(fyne.NewSize(380, 40))
+    //////
+    student_fees_amount := widget.NewEntry()
+    student_fees_amount.PlaceHolder = "Enter fees amount"
+    student_fees_amount.Move(fyne.NewPos(10, 250))
+    student_fees_amount.Resize(fyne.NewSize(380, 40))
+    /////////////////
+    btn3_input_fees := widget.NewButton("Deposit Fees", func() {
+        var user MUser
+        users.FindOne(ctx, bson.D{{"student_name", student_search.Text}}).Decode(&user) //filter := bson.D{{"name", "pi"}}
+        fmt.Println(user)
+        if user.Id == "" {
+            label_name.Text = "No Record Found.."
+            label_name.Resize(fyne.NewSize(200, 40))
+            label_name.Refresh()
+        } else {
+            label_name.Text = "" + user.StudentName
+            label_name.Refresh()
+            label_class.Text = "" + user.StudentClass
+            label_class.Refresh()
+            fmt.Printf("%s month index=%d\n", selecty.Selected, selecty.SelectedIndex())
+            fmt.Printf("%s year index=%d\n", select_month.Selected, select_month.SelectedIndex())
+            fmt.Printf("%s fees\n", student_fees_amount.Text)
+            _, _, date_today := t.Date()
+            date_converted := fmt.Sprint(date_today)
+            fmt.Printf(date_converted)
+            if student_fees_amount.Text != "" {
+                result, _ := users_fees.InsertOne(
+                    ctx, bson.D{
+                        {"student_name", user.StudentName},
+                        {"student_class", user.StudentClass},
+                        {"student_id", user.Id},
+                        {"student_fees_year", selecty.Selected},
+                        {"student_fees_month", select_month.Selected},
+                        {"student_fees_date", date_converted},
+                        {"student_fees_amount", student_fees_amount.Text},
+                    })
+                fmt.Println(result)
+            }
+
+        }
+    })
+    btn3_input_fees.Move(fyne.NewPos(160, 300))
+    btn3_input_fees.Resize(fyne.NewSize(120, 40))
+    //////////////
+    btn4_check_fees := widget.NewButton("Fees Status", func() {
+        var user MUser
+        var fees_status MUser_fees
+        users.FindOne(ctx, bson.D{{"student_name", student_search.Text}}).Decode(&user)
+        //filter := bson.D{{"name", "pi"}}
+        if user.Id == "" {
+            label_name.Text = "No Record Found.."
+            label_name.Resize(fyne.NewSize(200, 40))
+            label_name.Refresh()
+        } else {
+            label_name.Text = "" + user.StudentName
+            label_name.Refresh()
+            label_class.Text = "" + user.StudentClass
+            label_class.Refresh()
+            users_fees.FindOne(ctx, bson.D{
+                {"student_name", student_search.Text},
+                {"student_class", user.StudentClass},
+                {"student_fees_year", selecty.Selected},
+                {"student_id", user.Id},
+                {"student_fees_month", select_month.Selected},
+            }).Decode(&fees_status)
+            fmt.Println("--------------------------------------")
+            fmt.Printf("%s", fees_status.StudentFeesAmount)
+            fmt.Printf("%s", fees_status.StudentClass)
+            fmt.Printf("%s", fees_status.StudentFeesDate)
+            label.Text = fees_status.StudentName + " Fees Status"
+            label.Refresh()
+            c := container.NewVBox(
+                label,
+
+                container.NewGridWithColumns(2, widget.NewLabel("Student Name"), widget.NewLabel(fees_status.StudentName)),
+                canvas.NewLine(color.RGBA{R: 255, G: 0, B: 0, A: 255}),
+                container.NewGridWithColumns(2, widget.NewLabel("Student Class"), widget.NewLabel(fees_status.StudentClass)),
+                canvas.NewLine(color.RGBA{R: 255, G: 0, B: 0, A: 255}),
+                container.NewGridWithColumns(2, widget.NewLabel("Fees Amount"), widget.NewLabel(fees_status.StudentFeesAmount)),
+                canvas.NewLine(color.RGBA{R: 255, G: 0, B: 0, A: 255}),
+                container.NewGridWithColumns(2,
+                    widget.NewLabel("Date "),
+                    widget.NewLabel(fmt.Sprintf(
+                        "%s / %s /%s ", fees_status.StudentFeesDate, fees_status.StudentFeesMonth, fees_status.StudentFeesYear)),
+                ),
+                canvas.NewLine(color.RGBA{R: 255, G: 0, B: 0, A: 255}),
+            )
+            dlg := dialog.NewCustom("Fees Management System", "ok", c, w)
+            dlg.Resize(fyne.NewSize(350, 350))
+            dlg.Show()
+        }
+    })
+    btn4_check_fees.Move(fyne.NewPos(10, 300))
+    btn4_check_fees.Resize(fyne.NewSize(140, 40))
+    /////
+    btn5_check_fees := widget.NewButton("Fees Status", func() {
+        var fees_status1 []DUser_fees
+        var user MUser
+        users.FindOne(ctx, bson.D{{"student_name", student_search.Text}}).Decode(&user) //filter := bson.D{{"name", "pi"}}
+        cur, err := users_fees.Find(ctx, bson.D{
+            {"student_name", student_search.Text},
+            {"student_fees_year", selecty.Selected},
+            {"student_id", user.Id},
+        })
+        if err != nil {
+            log.Fatal(err)
+        }
+        defer cur.Close(ctx)
+
+        if err = cur.All(ctx, &fees_status1); err != nil {
+            panic(err)
+        }
+        fmt.Println(fees_status1)
+
+        if err := cur.Err(); err != nil {
+            log.Fatal(err)
+        }
+        if user.Id == "" {
+            label_name.Text = "No Record Found.."
+            label_name.Resize(fyne.NewSize(200, 40))
+            label_name.Refresh()
+        } else {
+            label_name.Text = "" + user.StudentName
+            label_name.Refresh()
+            label_class.Text = "" + user.StudentClass
+            label_class.Refresh()
+            label.Text = user.StudentName + " Fees Status"
+            label.Refresh()
+            c := container.NewVBox(
+                label,
+            )
+            for i := 0; i < len(fees_status1); i++ {
+                x := strconv.Itoa(i + 1)
+                c.Add(canvas.NewLine(color.RGBA{R: 255, G: 0, B: 0, A: 255}))
+                c.Add(
+                    container.NewGridWithColumns(3, widget.NewLabel(x), widget.NewLabel(fees_status1[i].StudentFeesMonth), widget.NewLabel("Paid")),
+                )
+            }
+            another_container_for_scrolling := container.NewHScroll(c)
+            dlg := dialog.NewCustom("Fees Management System", "ok", another_container_for_scrolling, w)
+            dlg.Resize(fyne.NewSize(350, 350))
+            dlg.Show()
+        }
+    })
+    btn5_check_fees.Move(fyne.NewPos(280, 300))
+    btn5_check_fees.Resize(fyne.NewSize(140, 40))
+    /////////
+    c_container := container.NewWithoutLayout(
+        hbox,
+        line,
+        line2,
+        line3,
+        btn1,
+        btn5_check_fees,
+        btn4_check_fees,
+        student_fees_amount,
+        btn3_input_fees,
+        label_class,
+        label_classx1,
+        label_name,
+        label_namex1,
+        student_search,
+        widget.NewLabel("Search Student Database"))
+    w.SetContent(
+        c_container,
+    )
+    w.ShowAndRun()
+}
