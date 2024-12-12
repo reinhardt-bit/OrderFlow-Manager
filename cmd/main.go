@@ -20,170 +20,45 @@ import (
 )
 
 func main() {
-	db, err := db.InitDB()
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer db.Close()
-
 	myApp := app.New()
 	myWindow := myApp.NewWindow("Blissful Bites Order Management")
 
-	// Create menu items
-	mainMenu := fyne.NewMainMenu(
-		fyne.NewMenu("Products",
-			fyne.NewMenuItem("Add New Product", func() {
-				showAddProductDialog(myWindow, db)
-			}),
-			fyne.NewMenuItem("Manage Products", func() {
-				showManageProductsDialog(myWindow, db)
-			}),
-		),
-		fyne.NewMenu("Representatives",
-			fyne.NewMenuItem("Add New Representative", func() {
-				showAddRepresentativeDialog(myWindow, db)
-			}),
-			fyne.NewMenuItem("Manage Representatives", func() {
-				showManageRepresentativesDialog(myWindow, db)
-			}),
-		),
-	)
-	myWindow.SetMainMenu(mainMenu)
+	// Update environment variables from config file
+	if err := db.UpdateEnvForDbConfig(); err != nil {
+		log.Printf("Error updating database config: %v", err)
+	}
 
-	// Initialize order table
-	orderTable := widget.NewTable(
-		func() (int, int) { return 6, 5 },
-		func() fyne.CanvasObject {
-			return widget.NewLabelWithStyle("", fyne.TextAlignLeading, fyne.TextStyle{})
-		},
-		func(id widget.TableCellID, cell fyne.CanvasObject) {},
-	)
+	// Validate database configuration
+	var database *sql.DB
+	var dbErr error
 
-	// Refresh function for the order table
-	refreshTable := func() {
-		orders, err := internal.LoadOrders(db)
-		if err != nil {
-			log.Printf("Error loading orders: %v", err)
+	if err := db.ValidateDbConfig(); err != nil {
+		log.Printf("Database configuration validation failed: %v", err)
+
+		// Show database configuration dialog
+		showDatabaseConfigDialog(myWindow, func() {
+			// Attempt to initialize DB after configuration
+			database, dbErr = db.InitDB()
+			if dbErr != nil {
+				dialog.ShowError(dbErr, myWindow)
+				return
+			}
+			// Continue with app initialization
+			// initializeMainApp(myApp, myWindow, database)
+			initializeMainApp(myWindow, database)
+		})
+	} else {
+		// Configuration is valid, proceed normally
+		database, dbErr = db.InitDB()
+		if dbErr != nil {
+			dialog.ShowError(dbErr, myWindow)
 			return
 		}
 
-		orderTable.Length = func() (int, int) {
-			return len(orders) + 1, 5 // +1 for header row
-		}
-
-		orderTable.UpdateCell = func(id widget.TableCellID, cell fyne.CanvasObject) {
-			orderTable.SetColumnWidth(0, 150) // Date
-			orderTable.SetColumnWidth(1, 200) // Client
-			orderTable.SetColumnWidth(2, 300) // Product
-			orderTable.SetColumnWidth(3, 100) // Price
-			orderTable.SetColumnWidth(4, 150) // Representative
-			orderTable.SetColumnWidth(5, 50)  // Status
-
-			label := cell.(*widget.Label)
-			if id.Row == 0 {
-				// Header row
-				switch id.Col {
-				case 0:
-					label.SetText("Date")
-				case 1:
-					label.SetText("Client")
-				case 2:
-					label.SetText("Product")
-				case 3:
-					label.SetText("Total")
-				case 4:
-					label.SetText("Representative")
-				case 5:
-					label.SetText("Status")
-				}
-				return
-			}
-
-			order := orders[id.Row-1]
-			switch id.Col {
-			case 0:
-				label.SetText(order.CreatedAt.Format("2006-01-02 15:04"))
-			case 1:
-				label.SetText(order.ClientName)
-			case 2:
-				label.SetText(fmt.Sprintf("%d x %s", order.Quantity, order.ProductName))
-			case 3:
-				label.SetText(fmt.Sprintf("R%.2f", order.Price))
-			case 4:
-				label.SetText(order.RepresentativeName)
-			case 5:
-				if order.Completed {
-					label.SetText("Completed")
-				} else {
-					label.SetText("Pending")
-				}
-			}
-		}
-		orderTable.Refresh()
+		// Continue with app initialization
+		// initializeMainApp(myApp, myWindow, database)
+		initializeMainApp(myWindow, database)
 	}
-
-	// Add new order button
-	addOrderBtn := widget.NewButton("+", func() {
-		showAddOrderDialog(myWindow, db, refreshTable)
-	})
-
-	// Create the layout
-	form := container.NewVBox(
-		widget.NewLabel("Orders"),
-		addOrderBtn,
-	)
-
-	// Track selected row
-	var selectedRow int = -1
-	orderTable.OnSelected = func(id widget.TableCellID) {
-		selectedRow = id.Row
-	}
-
-	// Complete order button
-	completeBtn := widget.NewButton("Mark Selected as Completed", func() {
-		if selectedRow > 0 {
-			orders, _ := internal.LoadOrders(db)
-			orderID := orders[selectedRow-1].ID
-
-			_, err := db.Exec("UPDATE orders SET completed = true WHERE id = ?", orderID)
-			if err != nil {
-				log.Printf("Error completing order: %v", err)
-				return
-			}
-			refreshTable()
-		}
-	})
-
-	downloadOrdersBtn := widget.NewButton("Download Orders", func() {
-		err := exportTableToExcel(db, "orders", "orders-history.xlsx")
-		if err != nil {
-			log.Printf("Error exporting to Excel: %v", err)
-		} else {
-			fmt.Println("Data exported successfully to orders-history.xlsx")
-		}
-	})
-
-	split := container.NewHSplit(
-		form,
-		container.NewBorder(
-			nil,
-			container.NewHBox(
-				completeBtn,
-				downloadOrdersBtn,
-			),
-			// completeBtn,
-			nil,
-			nil,
-			orderTable,
-		),
-	)
-	split.SetOffset(0.03)
-
-	myWindow.SetContent(split)
-	myWindow.Resize(fyne.NewSize(1024, 768))
-
-	// Initial table load
-	refreshTable()
 
 	myWindow.ShowAndRun()
 }
@@ -596,4 +471,240 @@ func showManageRepresentativesDialog(window fyne.Window, db *sql.DB) {
 	dialog := dialog.NewCustom("Manage Representatives", "Close", content, window)
 	dialog.Resize(fyne.NewSize(500, 400))
 	dialog.Show()
+}
+
+// Implement showDatabaseConfigDialog using the new db package methods
+func showDatabaseConfigDialog(window fyne.Window, onSaveCallback func()) {
+	// Load existing config
+	existingConfig, _ := db.LoadDbConfig()
+
+	// Create entries for database URL and auth token
+	urlEntry := widget.NewEntry()
+	urlEntry.SetPlaceHolder("Turso Database URL")
+	urlEntry.SetText(existingConfig.DatabaseURL)
+
+	tokenEntry := widget.NewEntry()
+	tokenEntry.SetPlaceHolder("Turso Auth Token")
+	tokenEntry.SetText(existingConfig.AuthToken)
+
+	content := container.NewVBox(
+		widget.NewLabel("Configure Turso Database Connection"),
+		widget.NewLabel("Database URL:"),
+		urlEntry,
+		widget.NewLabel("Auth Token:"),
+		tokenEntry,
+	)
+
+	dialog := dialog.NewCustomConfirm(
+		"Database Configuration",
+		"Save",
+		"Cancel",
+		content,
+		func(submit bool) {
+			if !submit {
+				// Exit the application if user cancels configuration
+				window.Close()
+				return
+			}
+
+			// Create and save new configuration
+			newConfig := db.DatabaseConfig{
+				DatabaseURL: urlEntry.Text,
+				AuthToken:   tokenEntry.Text,
+			}
+
+			err := db.SaveDbConfig(newConfig)
+			if err != nil {
+				dialog.ShowError(err, window)
+				return
+			}
+
+			dialog.ShowInformation("Success", "Database configuration saved", window)
+
+			// Call the provided callback
+			if onSaveCallback != nil {
+				onSaveCallback()
+			}
+		},
+		window,
+	)
+
+	dialog.Resize(fyne.NewSize(600, 300))
+	dialog.Show()
+}
+
+// New function to initialize main app components
+// func initializeMainApp(myApp fyne.App, myWindow fyne.Window, db *sql.DB) {
+func initializeMainApp(myWindow fyne.Window, db *sql.DB) {
+	// defer db.Close()
+
+	// Create menu items
+	mainMenu := fyne.NewMainMenu(
+		fyne.NewMenu("Products",
+			fyne.NewMenuItem("Add New Product", func() {
+				showAddProductDialog(myWindow, db)
+			}),
+			fyne.NewMenuItem("Manage Products", func() {
+				showManageProductsDialog(myWindow, db)
+			}),
+		),
+		fyne.NewMenu("Representatives",
+			fyne.NewMenuItem("Add New Representative", func() {
+				showAddRepresentativeDialog(myWindow, db)
+			}),
+			fyne.NewMenuItem("Manage Representatives", func() {
+				showManageRepresentativesDialog(myWindow, db)
+			}),
+		),
+		fyne.NewMenu("Settings",
+			fyne.NewMenuItem("Database Connection", func() {
+				showDatabaseConfigDialog(myWindow, nil)
+			}),
+		),
+	)
+
+	// Set the main menu
+	myWindow.SetMainMenu(mainMenu)
+
+	// Initialize order table
+	orderTable := widget.NewTable(
+		func() (int, int) { return 6, 5 },
+		func() fyne.CanvasObject {
+			return widget.NewLabelWithStyle("", fyne.TextAlignLeading, fyne.TextStyle{})
+		},
+		func(id widget.TableCellID, cell fyne.CanvasObject) {},
+	)
+
+	// Refresh function for the order table
+	refreshTable := func() {
+		orders, err := internal.LoadOrders(db)
+		if err != nil {
+			log.Printf("Error loading orders: %v", err)
+			return
+		}
+
+		orderTable.Length = func() (int, int) {
+			return len(orders) + 1, 5 // +1 for header row
+		}
+
+		orderTable.UpdateCell = func(id widget.TableCellID, cell fyne.CanvasObject) {
+			orderTable.SetColumnWidth(0, 150) // Date
+			orderTable.SetColumnWidth(1, 200) // Client
+			orderTable.SetColumnWidth(2, 300) // Product
+			orderTable.SetColumnWidth(3, 100) // Price
+			orderTable.SetColumnWidth(4, 150) // Representative
+			orderTable.SetColumnWidth(5, 50)  // Status
+
+			label := cell.(*widget.Label)
+			if id.Row == 0 {
+				// Header row
+				switch id.Col {
+				case 0:
+					label.SetText("Date")
+				case 1:
+					label.SetText("Client")
+				case 2:
+					label.SetText("Product")
+				case 3:
+					label.SetText("Total")
+				case 4:
+					label.SetText("Representative")
+				case 5:
+					label.SetText("Status")
+				}
+				return
+			}
+
+			order := orders[id.Row-1]
+			switch id.Col {
+			case 0:
+				label.SetText(order.CreatedAt.Format("2006-01-02 15:04"))
+			case 1:
+				label.SetText(order.ClientName)
+			case 2:
+				label.SetText(fmt.Sprintf("%d x %s", order.Quantity, order.ProductName))
+			case 3:
+				label.SetText(fmt.Sprintf("R%.2f", order.Price))
+			case 4:
+				label.SetText(order.RepresentativeName)
+			case 5:
+				if order.Completed {
+					label.SetText("Completed")
+				} else {
+					label.SetText("Pending")
+				}
+			}
+		}
+		orderTable.Refresh()
+	}
+
+	// Add new order button
+	addOrderBtn := widget.NewButton("+", func() {
+		showAddOrderDialog(myWindow, db, refreshTable)
+	})
+
+	// Create the layout
+	form := container.NewVBox(
+		widget.NewLabel("Orders"),
+		addOrderBtn,
+	)
+
+	// Track selected row
+	var selectedRow int = -1
+	orderTable.OnSelected = func(id widget.TableCellID) {
+		selectedRow = id.Row
+	}
+
+	// Complete order button
+	completeBtn := widget.NewButton("Mark Selected as Completed", func() {
+		if selectedRow > 0 {
+			orders, _ := internal.LoadOrders(db)
+			orderID := orders[selectedRow-1].ID
+
+			_, err := db.Exec("UPDATE orders SET completed = true WHERE id = ?", orderID)
+			if err != nil {
+				log.Printf("Error completing order: %v", err)
+				return
+			}
+			refreshTable()
+		}
+	})
+
+	downloadOrdersBtn := widget.NewButton("Download Orders", func() {
+		err := exportTableToExcel(db, "orders", "orders-history.xlsx")
+		if err != nil {
+			log.Printf("Error exporting to Excel: %v", err)
+		} else {
+			fmt.Println("Data exported successfully to orders-history.xlsx")
+		}
+	})
+
+	split := container.NewHSplit(
+		form,
+		container.NewBorder(
+			nil,
+			container.NewHBox(
+				completeBtn,
+				downloadOrdersBtn,
+			),
+			// completeBtn,
+			nil,
+			nil,
+			orderTable,
+		),
+	)
+	split.SetOffset(0.03)
+
+	myWindow.SetContent(split)
+	myWindow.Resize(fyne.NewSize(1024, 768))
+
+	// Initial table load
+	refreshTable()
+
+	// Add close handler
+	myWindow.SetOnClosed(func() {
+		db.Close()
+	})
+
+	// myWindow.ShowAndRun()
 }

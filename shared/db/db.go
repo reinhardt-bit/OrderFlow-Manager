@@ -2,32 +2,58 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"log"
+	"net/url"
 	"os"
+	"strings"
+	"time"
 
-	"github.com/joho/godotenv"
 	_ "github.com/tursodatabase/libsql-client-go/libsql"
 )
 
 func InitDB() (*sql.DB, error) {
-	err := godotenv.Load(".env")
-	if err != nil {
-		return nil, fmt.Errorf("error loading .env file: %v", err)
+	// First, try to update environment variables from the config file
+	if err := UpdateEnvForDbConfig(); err != nil {
+		log.Printf("Warning: Could not update config from file: %v", err)
+	}
+
+	// Validate database configuration
+	if err := ValidateDbConfig(); err != nil {
+		return nil, fmt.Errorf("database configuration invalid: %v", err)
 	}
 
 	primaryUrl := os.Getenv("TURSO_DATABASE_URL")
-	if primaryUrl == "" {
-		return nil, fmt.Errorf("TURSO_DATABASE_URL not set")
-	}
-
 	authToken := os.Getenv("TURSO_AUTH_TOKEN")
-	if authToken == "" {
-		return nil, fmt.Errorf("TURSO_AUTH_TOKEN not set")
+
+	// Log the connection details (for debugging)
+	// log.Printf("Connecting to database URL: %s", primaryUrl)
+
+	// Construct the connection string
+	connectionString := fmt.Sprintf("%s?authToken=%s",
+		strings.TrimSpace(primaryUrl),
+		url.QueryEscape(authToken),
+	)
+
+	// Open the database connection
+	db, err := sql.Open("libsql", connectionString)
+	if err != nil {
+		return nil, fmt.Errorf("error preparing database connection: %v", err)
 	}
 
-	db, err := sql.Open("libsql", primaryUrl+"?authToken="+authToken)
-	if err != nil {
+	// Set connection pool parameters
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(25)
+	db.SetConnMaxLifetime(5 * time.Minute)
+
+	// Verify the connection
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := db.PingContext(ctx); err != nil {
+		db.Close() // Ensure we close the connection if ping fails
 		return nil, fmt.Errorf("error connecting to database: %v", err)
 	}
 

@@ -4,7 +4,6 @@ go 1.23.4
 
 require (
 	fyne.io/fyne/v2 v2.5.2
-	github.com/joho/godotenv v1.5.1
 	github.com/tursodatabase/libsql-client-go v0.0.0-20240902231107-85af5b9d094d
 	github.com/xuri/excelize/v2 v2.9.0
 )
