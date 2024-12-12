@@ -1,3 +1,4 @@
+// shared/db/db.go
 package db
 
 import (
@@ -6,7 +7,6 @@ import (
 	"os"
 
 	"github.com/joho/godotenv"
-
 	_ "github.com/tursodatabase/libsql-client-go/libsql"
 )
 
@@ -31,48 +31,51 @@ func InitDB() (*sql.DB, error) {
 		return nil, fmt.Errorf("error connecting to database: %v", err)
 	}
 
-	// Modified table creation with correct column names
+	// Create products table
 	_, err = db.Exec(`
-        CREATE TABLE IF NOT EXISTS orders (
+        CREATE TABLE IF NOT EXISTS products (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            created_at DATETIME,
-            client_name TEXT,
-            contact TEXT,
-            select_product TEXT,
-            select_flavor TEXT,
-            quantity INTEGER,
-            price REAL,
-            needs_delivery BOOLEAN,
-            delivery_address TEXT,
-            comment TEXT,
-            completed BOOLEAN
+            name TEXT NOT NULL,
+            price REAL NOT NULL,
+            active BOOLEAN DEFAULT true
         )
     `)
-	if err != nil {
-		return nil, fmt.Errorf("error creating tables: %v", err)
-	}
-
-	_, err = db.Exec(`
-    CREATE TABLE IF NOT EXISTS products (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        base_price REAL NOT NULL
-    )
-`)
 	if err != nil {
 		return nil, fmt.Errorf("error creating products table: %v", err)
 	}
 
 	_, err = db.Exec(`
-    CREATE TABLE IF NOT EXISTS flavors (
+    CREATE TABLE IF NOT EXISTS representatives (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
-        product_id INTEGER,
-        FOREIGN KEY(product_id) REFERENCES products(id)
+        active BOOLEAN DEFAULT true
     )
 `)
 	if err != nil {
-		return nil, fmt.Errorf("error creating flavors table: %v", err)
+		return nil, fmt.Errorf("error creating representatives table: %v", err)
+	}
+
+	// Create orders table
+	_, err = db.Exec(`
+    CREATE TABLE IF NOT EXISTS orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at DATETIME,
+        client_name TEXT,
+        contact TEXT,
+        product_id INTEGER,
+        quantity INTEGER,
+        price REAL,
+        needs_delivery BOOLEAN,
+        delivery_address TEXT,
+        comment TEXT,
+        completed BOOLEAN,
+        representative_id INTEGER,  -- Add the column first
+        FOREIGN KEY(product_id) REFERENCES products(id),
+        FOREIGN KEY(representative_id) REFERENCES representatives(id)
+    )
+`)
+	if err != nil {
+		return nil, fmt.Errorf("error creating orders table: %v", err)
 	}
 
 	return db, nil
