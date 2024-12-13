@@ -2,8 +2,8 @@
 package main
 
 import (
-	"blissfulBytes-management/internal"
-	"blissfulBytes-management/shared/db"
+	"blissfulBytes-manager/internal"
+	"blissfulBytes-manager/shared/db"
 	"database/sql"
 	"fmt"
 	"log"
@@ -23,8 +23,8 @@ import (
 
 func main() {
 	// myApp := app.New()
-	myApp := app.NewWithID("com.blissfulbytes.management")
-	myWindow := myApp.NewWindow("Blissful Bites Order Management")
+	myApp := app.NewWithID("com.blissfulbytes.manager")
+	myWindow := myApp.NewWindow("Blissful Bites Manager")
 
 	// Update environment variables from config file
 	if err := db.UpdateEnvForDbConfig(); err != nil {

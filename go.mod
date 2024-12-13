@@ -1,4 +1,4 @@
-module blissfulBytes-management
+module blissfulBytes-manager
 
 go 1.23.4
 
