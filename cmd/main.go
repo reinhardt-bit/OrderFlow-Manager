@@ -8,19 +8,22 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/xuri/excelize/v2"
 )
 
 func main() {
-	myApp := app.New()
+	// myApp := app.New()
+	myApp := app.NewWithID("com.blissfulbytes.management")
 	myWindow := myApp.NewWindow("Blissful Bites Order Management")
 
 	// Update environment variables from config file
@@ -671,12 +674,44 @@ func initializeMainApp(myWindow fyne.Window, db *sql.DB) {
 	})
 
 	downloadOrdersBtn := widget.NewButton("Download Orders", func() {
-		err := exportTableToExcel(db, "orders", "orders-history.xlsx")
-		if err != nil {
-			log.Printf("Error exporting to Excel: %v", err)
-		} else {
-			fmt.Println("Data exported successfully to orders-history.xlsx")
-		}
+		// Create dialog with file save picker
+		dialog := dialog.NewFileSave(
+			func(writer fyne.URIWriteCloser, err error) {
+				if err != nil {
+					dialog.ShowError(err, myWindow)
+					return
+				}
+				if writer == nil {
+					return // user cancelled
+				}
+				defer writer.Close()
+
+				// Get the selected path and ensure it ends with .xlsx
+				path := writer.URI().Path()
+				if !strings.HasSuffix(strings.ToLower(path), ".xlsx") {
+					path += ".xlsx"
+				}
+
+				// Export the orders
+				if err := exportOrdersToExcel(db, path); err != nil {
+					dialog.ShowError(err, myWindow)
+					return
+				}
+
+				dialog.ShowInformation("Success",
+					"Orders have been exported successfully to:\n"+path,
+					myWindow)
+			},
+			myWindow)
+
+		// Set default filename
+		dialog.SetFileName(fmt.Sprintf("orders_%s.xlsx",
+			time.Now().Format("2006-01-02")))
+
+		// Set filter for Excel files
+		dialog.SetFilter(storage.NewExtensionFileFilter([]string{".xlsx"}))
+
+		dialog.Show()
 	})
 
 	split := container.NewHSplit(
@@ -707,4 +742,157 @@ func initializeMainApp(myWindow fyne.Window, db *sql.DB) {
 	})
 
 	// myWindow.ShowAndRun()
+}
+
+func exportOrdersToExcel(db *sql.DB, filePath string) error {
+	// Query orders with joined product and representative information
+	query := `
+        SELECT
+            o.id,
+            o.created_at,
+            o.client_name,
+            o.contact,
+            p.name as product_name,
+            o.quantity,
+            o.price,
+            o.needs_delivery,
+            o.delivery_address,
+            o.comment,
+            o.completed,
+            r.name as representative_name
+        FROM orders o
+        LEFT JOIN products p ON o.product_id = p.id
+        LEFT JOIN representatives r ON o.representative_id = r.id
+        ORDER BY o.created_at DESC
+    `
+
+	rows, err := db.Query(query)
+	if err != nil {
+		return fmt.Errorf("error querying orders: %w", err)
+	}
+	defer rows.Close()
+
+	// Create a new Excel file
+	f := excelize.NewFile()
+	sheetName := "Orders"
+	f.SetSheetName("Sheet1", sheetName)
+
+	// Define headers
+	headers := []string{
+		"Order ID",
+		"Date",
+		"Client Name",
+		"Contact",
+		"Product",
+		"Quantity",
+		"Total Price",
+		"Needs Delivery",
+		"Delivery Address",
+		"Comment",
+		"Status",
+		"Representative",
+	}
+
+	// Write headers
+	for i, header := range headers {
+		col, _ := excelize.ColumnNumberToName(i + 1)
+		f.SetCellValue(sheetName, col+"1", header)
+
+		// Set column width based on content
+		f.SetColWidth(sheetName, col, col, 15)
+	}
+
+	// Write data rows
+	rowIndex := 2
+	for rows.Next() {
+		var (
+			id            int64
+			createdAt     time.Time
+			clientName    string
+			contact       string
+			productName   string
+			quantity      int
+			price         float64
+			needsDelivery bool
+			deliveryAddr  sql.NullString
+			comment       sql.NullString
+			completed     bool
+			repName       sql.NullString
+		)
+
+		err := rows.Scan(
+			&id,
+			&createdAt,
+			&clientName,
+			&contact,
+			&productName,
+			&quantity,
+			&price,
+			&needsDelivery,
+			&deliveryAddr,
+			&comment,
+			&completed,
+			&repName,
+		)
+		if err != nil {
+			return fmt.Errorf("error scanning row: %w", err)
+		}
+
+		// Format status
+		status := "Pending"
+		if completed {
+			status = "Completed"
+		}
+
+		// Write row data
+		rowData := []interface{}{
+			id,
+			createdAt.Format("2006-01-02 15:04"),
+			clientName,
+			contact,
+			productName,
+			quantity,
+			fmt.Sprintf("R%.2f", price),
+			needsDelivery,
+			deliveryAddr.String,
+			comment.String,
+			status,
+			repName.String,
+		}
+
+		for i, value := range rowData {
+			col, _ := excelize.ColumnNumberToName(i + 1)
+			f.SetCellValue(sheetName, fmt.Sprintf("%s%d", col, rowIndex), value)
+		}
+		rowIndex++
+	}
+
+	// Apply some styling
+	style, err := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{
+			Bold: true,
+		},
+		Fill: excelize.Fill{
+			Type:    "pattern",
+			Color:   []string{"#E0E0E0"},
+			Pattern: 1,
+		},
+	})
+	if err == nil {
+		// Apply style to header row
+		f.SetRowStyle(sheetName, 1, 1, style)
+	}
+
+	// Auto-filter for all columns
+	lastCol, _ := excelize.ColumnNumberToName(len(headers))
+	// f.AutoFilter(sheetName, "A1", fmt.Sprintf("%s%d", lastCol, rowIndex-1), nil)
+	ref := fmt.Sprintf("A1:%s%d", lastCol, rowIndex-1)
+	f.AutoFilter(sheetName, ref, []excelize.AutoFilterOptions{})
+
+	// Save the file
+	if err := f.SaveAs(filePath); err != nil {
+		return fmt.Errorf("error saving Excel file: %w", err)
+	}
+
+	return nil
 }
