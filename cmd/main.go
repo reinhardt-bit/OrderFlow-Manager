@@ -230,6 +230,9 @@ func showAddOrderDialog(window fyne.Window, db *sql.DB, refreshTable func()) {
 	contactEntry := widget.NewEntry()
 	contactEntry.SetPlaceHolder("Contact")
 
+	dueDatePicker := widget.NewEntry()
+	dueDatePicker.SetPlaceHolder("Due Date (YYYY-MM-DD)")
+
 	productSelect := widget.NewSelect(productNames, nil)
 	productSelect.PlaceHolder = "Select product"
 
@@ -275,6 +278,7 @@ func showAddOrderDialog(window fyne.Window, db *sql.DB, refreshTable func()) {
 		repSelect,
 		nameEntry,
 		contactEntry,
+		dueDatePicker,
 		productSelect,
 		quantityEntry,
 		priceLabel,
@@ -290,6 +294,13 @@ func showAddOrderDialog(window fyne.Window, db *sql.DB, refreshTable func()) {
 		content,
 		func(submit bool) {
 			if !submit {
+				return
+			}
+
+			// Parse due date
+			dueDate, err := time.Parse("2006-01-02", dueDatePicker.Text)
+			if err != nil {
+				dialog.ShowError(fmt.Errorf("Invalid due date format. Please use YYYY-MM-DD"), window)
 				return
 			}
 
@@ -312,11 +323,11 @@ func showAddOrderDialog(window fyne.Window, db *sql.DB, refreshTable func()) {
 
 			_, err = db.Exec(`
                 INSERT INTO orders (
-                    created_at, client_name, contact, product_id,
+                    created_at, due_date, client_name, contact, product_id,
                     representative_id, quantity, price, needs_delivery,
                     delivery_address, comment, completed
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-				time.Now(), nameEntry.Text, contactEntry.Text,
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				time.Now(), dueDate, nameEntry.Text, contactEntry.Text,
 				selectedProduct.ID, repID, quantity, totalPrice,
 				deliveryCheck.Checked, addressEntry.Text,
 				commentEntry.Text, false,
@@ -571,7 +582,7 @@ func initializeMainApp(myWindow fyne.Window, db *sql.DB) {
 
 	// Initialize order table
 	orderTable := widget.NewTable(
-		func() (int, int) { return 6, 5 },
+		func() (int, int) { return 6, 8 },
 		func() fyne.CanvasObject {
 			return widget.NewLabelWithStyle("", fyne.TextAlignLeading, fyne.TextStyle{})
 		},
@@ -587,7 +598,7 @@ func initializeMainApp(myWindow fyne.Window, db *sql.DB) {
 		}
 
 		orderTable.Length = func() (int, int) {
-			return len(orders) + 1, 5 // +1 for header row
+			return len(orders) + 1, 8 // +1 for header row
 		}
 
 		orderTable.UpdateCell = func(id widget.TableCellID, cell fyne.CanvasObject) {
@@ -596,7 +607,9 @@ func initializeMainApp(myWindow fyne.Window, db *sql.DB) {
 			orderTable.SetColumnWidth(2, 300) // Product
 			orderTable.SetColumnWidth(3, 100) // Price
 			orderTable.SetColumnWidth(4, 150) // Representative
-			orderTable.SetColumnWidth(5, 50)  // Status
+			orderTable.SetColumnWidth(5, 80)  // Due Date
+			orderTable.SetColumnWidth(6, 80)  // Status
+			orderTable.SetColumnWidth(7, 300) // Comment
 
 			label := cell.(*widget.Label)
 			if id.Row == 0 {
@@ -613,7 +626,11 @@ func initializeMainApp(myWindow fyne.Window, db *sql.DB) {
 				case 4:
 					label.SetText("Representative")
 				case 5:
+					label.SetText("Due Date")
+				case 6:
 					label.SetText("Status")
+				case 7:
+					label.SetText("Comment")
 				}
 				return
 			}
@@ -623,7 +640,9 @@ func initializeMainApp(myWindow fyne.Window, db *sql.DB) {
 			case 0:
 				label.SetText(order.CreatedAt.Format("2006-01-02 15:04"))
 			case 1:
-				label.SetText(order.ClientName)
+				clientInfo := fmt.Sprintf("%s - %s", order.ClientName, order.Contact)
+				label.SetText(clientInfo)
+				// label.SetText(order.ClientName)
 			case 2:
 				label.SetText(fmt.Sprintf("%d x %s", order.Quantity, order.ProductName))
 			case 3:
@@ -631,11 +650,16 @@ func initializeMainApp(myWindow fyne.Window, db *sql.DB) {
 			case 4:
 				label.SetText(order.RepresentativeName)
 			case 5:
+				label.SetText(order.DueDate.Format("2006-01-02"))
+			case 6:
 				if order.Completed {
 					label.SetText("Completed")
 				} else {
 					label.SetText("Pending")
 				}
+			case 7:
+				label.SetText(order.Comment)
+
 			}
 		}
 		orderTable.Refresh()
@@ -750,6 +774,7 @@ func exportOrdersToExcel(db *sql.DB, filePath string) error {
         SELECT
             o.id,
             o.created_at,
+            o.due_date,
             o.client_name,
             o.contact,
             p.name as product_name,
@@ -781,6 +806,7 @@ func exportOrdersToExcel(db *sql.DB, filePath string) error {
 	headers := []string{
 		"Order ID",
 		"Date",
+		"Due Date",
 		"Client Name",
 		"Contact",
 		"Product",
@@ -808,6 +834,7 @@ func exportOrdersToExcel(db *sql.DB, filePath string) error {
 		var (
 			id            int64
 			createdAt     time.Time
+			dueDate       time.Time
 			clientName    string
 			contact       string
 			productName   string
@@ -823,6 +850,7 @@ func exportOrdersToExcel(db *sql.DB, filePath string) error {
 		err := rows.Scan(
 			&id,
 			&createdAt,
+			&dueDate,
 			&clientName,
 			&contact,
 			&productName,
@@ -848,6 +876,7 @@ func exportOrdersToExcel(db *sql.DB, filePath string) error {
 		rowData := []interface{}{
 			id,
 			createdAt.Format("2006-01-02 15:04"),
+			dueDate.Format("2006-01-02"),
 			clientName,
 			contact,
 			productName,

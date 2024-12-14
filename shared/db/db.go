@@ -86,6 +86,7 @@ func InitDB() (*sql.DB, error) {
     CREATE TABLE IF NOT EXISTS orders (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         created_at DATETIME,
+        due_date DATETIME,
         client_name TEXT,
         contact TEXT,
         product_id INTEGER,
@@ -95,7 +96,7 @@ func InitDB() (*sql.DB, error) {
         delivery_address TEXT,
         comment TEXT,
         completed BOOLEAN,
-        representative_id INTEGER,  -- Add the column first
+        representative_id INTEGER,
         FOREIGN KEY(product_id) REFERENCES products(id),
         FOREIGN KEY(representative_id) REFERENCES representatives(id)
     )

@@ -9,6 +9,7 @@ import (
 type Order struct {
 	ID                 int64
 	CreatedAt          time.Time
+	DueDate            time.Time
 	ClientName         string
 	Contact            string
 	ProductID          int64
@@ -25,7 +26,7 @@ type Order struct {
 
 func LoadOrders(db *sql.DB) ([]Order, error) {
 	rows, err := db.Query(`
-        SELECT o.id, o.created_at, o.client_name, o.contact,
+        SELECT o.id, o.created_at, o.due_date, o.client_name, o.contact,
                o.product_id, p.name, o.representative_id, r.name,
                o.quantity, o.price, o.needs_delivery, o.delivery_address,
                o.comment, o.completed
@@ -44,7 +45,7 @@ func LoadOrders(db *sql.DB) ([]Order, error) {
 	for rows.Next() {
 		var o Order
 		err := rows.Scan(
-			&o.ID, &o.CreatedAt, &o.ClientName, &o.Contact,
+			&o.ID, &o.CreatedAt, &o.DueDate, &o.ClientName, &o.Contact,
 			&o.ProductID, &o.ProductName, &o.RepresentativeID, &o.RepresentativeName,
 			&o.Quantity, &o.Price, &o.NeedsDelivery, &o.DeliveryAddress,
 			&o.Comment, &o.Completed,
