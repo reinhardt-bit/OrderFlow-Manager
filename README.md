@@ -1,6 +1,6 @@
-# Blissful Bytes Manager
+# Blissful Bites Manager
 
-A desktop application for managing orders, products, and representatives for Blissful Bytes.
+A desktop application for managing orders, products, and representatives for Blissful Bites.
 
 ## Prerequisites
 
