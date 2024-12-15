@@ -1,10 +1,10 @@
 Website = "https://github.com/reinhardt-bit/Blissful-Bytes-Manager"
 
 [Details]
-Name = "Blissful Bites Manager"
-ID = "com.blissfulbytes.manager"
-Version = "0.1.0"
-Build = 1
+  Name = "Blissful Bites Manager"
+  ID = "com.blissfulbytes.manager"
+  Version = "0.1.0"
+  Build = 3
 
 [Development]
-Icon = "Icon.png"
+  Icon = "Icon.png"
