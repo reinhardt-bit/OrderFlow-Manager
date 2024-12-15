@@ -303,7 +303,7 @@ func showAddOrderDialog(window fyne.Window, db *sql.DB, refreshTable func()) {
                 INSERT INTO orders (
                     created_at, due_date, client_name, contact,
                     representative_id, comment, completed, total_price
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 				time.Now(), dueDate, nameEntry.Text, contactEntry.Text,
 				repID, commentEntry.Text, false, updateTotalPrice(),
 			)
