@@ -81,7 +81,7 @@ func InitDB() (*sql.DB, error) {
 		return nil, fmt.Errorf("error creating representatives table: %v", err)
 	}
 
-	// Create orders table
+	// Update orders table structure
 	_, err = db.Exec(`
     CREATE TABLE IF NOT EXISTS orders (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -89,20 +89,33 @@ func InitDB() (*sql.DB, error) {
         due_date DATETIME,
         client_name TEXT,
         contact TEXT,
-        product_id INTEGER,
-        quantity INTEGER,
-        price REAL,
         needs_delivery BOOLEAN,
         delivery_address TEXT,
         comment TEXT,
         completed BOOLEAN,
         representative_id INTEGER,
-        FOREIGN KEY(product_id) REFERENCES products(id),
+        total_price REAL,
         FOREIGN KEY(representative_id) REFERENCES representatives(id)
     )
 `)
 	if err != nil {
 		return nil, fmt.Errorf("error creating orders table: %v", err)
+	}
+
+	// Create order items table
+	_, err = db.Exec(`
+    CREATE TABLE IF NOT EXISTS order_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER,
+        product_id INTEGER,
+        quantity INTEGER,
+        price REAL,
+        FOREIGN KEY(order_id) REFERENCES orders(id),
+        FOREIGN KEY(product_id) REFERENCES products(id)
+    )
+`)
+	if err != nil {
+		return nil, fmt.Errorf("error creating order_items table: %v", err)
 	}
 
 	return db, nil

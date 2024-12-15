@@ -1,3 +1,5 @@
 .env
 samoosa-tracker/
 .gitignore
+build/
+build.sh

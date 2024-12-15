@@ -22,7 +22,6 @@ import (
 )
 
 func main() {
-	// myApp := app.New()
 	myApp := app.NewWithID("com.blissfulbytes.manager")
 	myWindow := myApp.NewWindow("Blissful Bites Manager")
 
@@ -47,7 +46,6 @@ func main() {
 				return
 			}
 			// Continue with app initialization
-			// initializeMainApp(myApp, myWindow, database)
 			initializeMainApp(myWindow, database)
 		})
 	} else {
@@ -59,7 +57,6 @@ func main() {
 		}
 
 		// Continue with app initialization
-		// initializeMainApp(myApp, myWindow, database)
 		initializeMainApp(myWindow, database)
 	}
 
@@ -213,17 +210,6 @@ func showEditProductDialog(window fyne.Window, db *sql.DB, product internal.Prod
 }
 
 func showAddOrderDialog(window fyne.Window, db *sql.DB, refreshTable func()) {
-	products, err := internal.LoadProducts(db)
-	if err != nil {
-		dialog.ShowError(err, window)
-		return
-	}
-
-	var productNames []string
-	for _, p := range products {
-		productNames = append(productNames, p.Name)
-	}
-
 	nameEntry := widget.NewEntry()
 	nameEntry.SetPlaceHolder("Client Name")
 
@@ -233,29 +219,26 @@ func showAddOrderDialog(window fyne.Window, db *sql.DB, refreshTable func()) {
 	dueDatePicker := widget.NewEntry()
 	dueDatePicker.SetPlaceHolder("Due Date (YYYY-MM-DD)")
 
-	productSelect := widget.NewSelect(productNames, nil)
-	productSelect.PlaceHolder = "Select product"
+	var orderItems []internal.OrderItem
 
-	quantityEntry := widget.NewEntry()
-	quantityEntry.SetPlaceHolder("Quantity")
-
-	priceLabel := widget.NewLabel("Price: R0.00")
-	var selectedProduct internal.Product
-
-	productSelect.OnChanged = func(value string) {
-		for _, p := range products {
-			if p.Name == value {
-				selectedProduct = p
-				priceLabel.SetText(fmt.Sprintf("Price: R%.2f", p.Price))
-				break
-			}
+	updateTotalPrice := func() float64 {
+		var total float64
+		for _, item := range orderItems {
+			total += item.Price
 		}
+		return total
 	}
 
-	deliveryCheck := widget.NewCheck("Needs Delivery", nil)
-
-	addressEntry := widget.NewMultiLineEntry()
-	addressEntry.SetPlaceHolder("Delivery Address")
+	itemsButton := widget.NewButton("Manage Items", func() {
+		products, err := internal.LoadProducts(db)
+		if err != nil {
+			dialog.ShowError(err, window)
+			return
+		}
+		showOrderItemsDialog(window, products, orderItems, func(items []internal.OrderItem) {
+			orderItems = items
+		})
+	})
 
 	commentEntry := widget.NewMultiLineEntry()
 	commentEntry.SetPlaceHolder("Comment")
@@ -279,11 +262,7 @@ func showAddOrderDialog(window fyne.Window, db *sql.DB, refreshTable func()) {
 		nameEntry,
 		contactEntry,
 		dueDatePicker,
-		productSelect,
-		quantityEntry,
-		priceLabel,
-		deliveryCheck,
-		addressEntry,
+		itemsButton,
 		commentEntry,
 	)
 
@@ -297,14 +276,12 @@ func showAddOrderDialog(window fyne.Window, db *sql.DB, refreshTable func()) {
 				return
 			}
 
-			// Parse due date
 			dueDate, err := time.Parse("2006-01-02", dueDatePicker.Text)
 			if err != nil {
 				dialog.ShowError(fmt.Errorf("Invalid due date format. Please use YYYY-MM-DD"), window)
 				return
 			}
 
-			// Find selected representative ID
 			var repID int64
 			for _, r := range representatives {
 				if r.Name == repSelect.Selected {
@@ -313,27 +290,49 @@ func showAddOrderDialog(window fyne.Window, db *sql.DB, refreshTable func()) {
 				}
 			}
 
-			quantity, err := strconv.Atoi(quantityEntry.Text)
+			// Begin transaction
+			tx, err := db.Begin()
 			if err != nil {
-				dialog.ShowError(fmt.Errorf("Invalid quantity"), window)
+				dialog.ShowError(err, window)
+				return
+			}
+			defer tx.Rollback()
+
+			// Insert main order
+			result, err := tx.Exec(`
+                INSERT INTO orders (
+                    created_at, due_date, client_name, contact,
+                    representative_id, comment, completed, total_price
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				time.Now(), dueDate, nameEntry.Text, contactEntry.Text,
+				repID, commentEntry.Text, false, updateTotalPrice(),
+			)
+			if err != nil {
+				dialog.ShowError(err, window)
 				return
 			}
 
-			totalPrice := selectedProduct.Price * float64(quantity)
-
-			_, err = db.Exec(`
-                INSERT INTO orders (
-                    created_at, due_date, client_name, contact, product_id,
-                    representative_id, quantity, price, needs_delivery,
-                    delivery_address, comment, completed
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-				time.Now(), dueDate, nameEntry.Text, contactEntry.Text,
-				selectedProduct.ID, repID, quantity, totalPrice,
-				deliveryCheck.Checked, addressEntry.Text,
-				commentEntry.Text, false,
-			)
-
+			orderID, err := result.LastInsertId()
 			if err != nil {
+				dialog.ShowError(err, window)
+				return
+			}
+
+			// Insert order items
+			for _, item := range orderItems {
+				_, err = tx.Exec(`
+                    INSERT INTO order_items (
+                        order_id, product_id, quantity, price
+                    ) VALUES (?, ?, ?, ?)`,
+					orderID, item.ProductID, item.Quantity, item.Price,
+				)
+				if err != nil {
+					dialog.ShowError(err, window)
+					return
+				}
+			}
+
+			if err := tx.Commit(); err != nil {
 				dialog.ShowError(err, window)
 				return
 			}
@@ -345,61 +344,6 @@ func showAddOrderDialog(window fyne.Window, db *sql.DB, refreshTable func()) {
 
 	dialog.Resize(fyne.NewSize(600, 500))
 	dialog.Show()
-}
-
-func exportTableToExcel(db *sql.DB, tableName, fileName string) error {
-	// Query the table
-	rows, err := db.Query(fmt.Sprintf("SELECT * FROM %s", tableName))
-	if err != nil {
-		return fmt.Errorf("error querying table: %w", err)
-	}
-	defer rows.Close()
-
-	// Get column names
-	columns, err := rows.Columns()
-	if err != nil {
-		return fmt.Errorf("error fetching column names: %w", err)
-	}
-
-	// Create a new Excel file
-	f := excelize.NewFile()
-	sheetName := "Sheet1"
-	f.SetSheetName("Sheet1", sheetName)
-
-	// Write column headers
-	for i, col := range columns {
-		columnName, _ := excelize.ColumnNumberToName(i + 1)
-		cell := columnName + "1"
-		f.SetCellValue(sheetName, cell, col)
-	}
-
-	// Write rows
-	rowIndex := 2
-	for rows.Next() {
-		values := make([]interface{}, len(columns))
-		valuePtrs := make([]interface{}, len(columns))
-		for i := range values {
-			valuePtrs[i] = &values[i]
-		}
-
-		if err := rows.Scan(valuePtrs...); err != nil {
-			return fmt.Errorf("error scanning row: %w", err)
-		}
-
-		for i, val := range values {
-			columnName, _ := excelize.ColumnNumberToName(i + 1)
-			cell := columnName + fmt.Sprintf("%d", rowIndex)
-			f.SetCellValue(sheetName, cell, val)
-		}
-		rowIndex++
-	}
-
-	// Save the Excel file
-	if err := f.SaveAs(fileName); err != nil {
-		return fmt.Errorf("error saving Excel file: %w", err)
-	}
-
-	return nil
 }
 
 func showAddRepresentativeDialog(window fyne.Window, db *sql.DB) {
@@ -548,9 +492,7 @@ func showDatabaseConfigDialog(window fyne.Window, onSaveCallback func()) {
 }
 
 // New function to initialize main app components
-// func initializeMainApp(myApp fyne.App, myWindow fyne.Window, db *sql.DB) {
 func initializeMainApp(myWindow fyne.Window, db *sql.DB) {
-	// defer db.Close()
 
 	// Create menu items
 	mainMenu := fyne.NewMainMenu(
@@ -604,14 +546,16 @@ func initializeMainApp(myWindow fyne.Window, db *sql.DB) {
 		orderTable.UpdateCell = func(id widget.TableCellID, cell fyne.CanvasObject) {
 			orderTable.SetColumnWidth(0, 150) // Date
 			orderTable.SetColumnWidth(1, 200) // Client
-			orderTable.SetColumnWidth(2, 300) // Product
-			orderTable.SetColumnWidth(3, 100) // Price
+			orderTable.SetColumnWidth(2, 300) // Products
+			orderTable.SetColumnWidth(3, 100) // Total Price
 			orderTable.SetColumnWidth(4, 150) // Representative
-			orderTable.SetColumnWidth(5, 80)  // Due Date
+			orderTable.SetColumnWidth(5, 90)  // Due Date
 			orderTable.SetColumnWidth(6, 80)  // Status
 			orderTable.SetColumnWidth(7, 300) // Comment
 
 			label := cell.(*widget.Label)
+			label.Wrapping = fyne.TextWrapWord
+
 			if id.Row == 0 {
 				// Header row
 				switch id.Col {
@@ -620,7 +564,7 @@ func initializeMainApp(myWindow fyne.Window, db *sql.DB) {
 				case 1:
 					label.SetText("Client")
 				case 2:
-					label.SetText("Product")
+					label.SetText("Products")
 				case 3:
 					label.SetText("Total")
 				case 4:
@@ -633,36 +577,43 @@ func initializeMainApp(myWindow fyne.Window, db *sql.DB) {
 					label.SetText("Comment")
 				}
 				return
-			}
-
-			order := orders[id.Row-1]
-			switch id.Col {
-			case 0:
-				label.SetText(order.CreatedAt.Format("2006-01-02 15:04"))
-			case 1:
-				clientInfo := fmt.Sprintf("%s - %s", order.ClientName, order.Contact)
-				label.SetText(clientInfo)
-				// label.SetText(order.ClientName)
-			case 2:
-				label.SetText(fmt.Sprintf("%d x %s", order.Quantity, order.ProductName))
-			case 3:
-				label.SetText(fmt.Sprintf("R%.2f", order.Price))
-			case 4:
-				label.SetText(order.RepresentativeName)
-			case 5:
-				label.SetText(order.DueDate.Format("2006-01-02"))
-			case 6:
-				if order.Completed {
-					label.SetText("Completed")
-				} else {
-					label.SetText("Pending")
+			} else {
+				order := orders[id.Row-1]
+				switch id.Col {
+				case 0:
+					label.SetText(order.CreatedAt.Format("2006-01-02 15:04"))
+				case 1:
+					clientInfo := fmt.Sprintf("%s\n%s", order.ClientName, order.Contact)
+					label.SetText(clientInfo)
+				case 2:
+					var products []string
+					for _, item := range order.Items {
+						products = append(products, fmt.Sprintf("%d x %s", item.Quantity, item.ProductName))
+					}
+					label.SetText(strings.Join(products, "\n"))
+					// Set minimum height based on number of products
+					minHeight := 40 * float32(len(products))
+					if minHeight < 45 {
+						minHeight = 45
+					}
+					orderTable.SetRowHeight(id.Row, minHeight)
+				case 3:
+					label.SetText(fmt.Sprintf("R%.2f", order.TotalPrice))
+				case 4:
+					label.SetText(order.RepresentativeName)
+				case 5:
+					label.SetText(order.DueDate.Format("2006-01-02"))
+				case 6:
+					if order.Completed {
+						label.SetText("Completed")
+					} else {
+						label.SetText("Pending")
+					}
+				case 7:
+					label.SetText(order.Comment)
 				}
-			case 7:
-				label.SetText(order.Comment)
-
 			}
 		}
-		orderTable.Refresh()
 	}
 
 	// Add new order button
@@ -675,27 +626,6 @@ func initializeMainApp(myWindow fyne.Window, db *sql.DB) {
 		widget.NewLabel("Orders"),
 		addOrderBtn,
 	)
-
-	// Track selected row
-	var selectedRow int = -1
-	orderTable.OnSelected = func(id widget.TableCellID) {
-		selectedRow = id.Row
-	}
-
-	// Complete order button
-	completeBtn := widget.NewButton("Mark Selected as Completed", func() {
-		if selectedRow > 0 {
-			orders, _ := internal.LoadOrders(db)
-			orderID := orders[selectedRow-1].ID
-
-			_, err := db.Exec("UPDATE orders SET completed = true WHERE id = ?", orderID)
-			if err != nil {
-				log.Printf("Error completing order: %v", err)
-				return
-			}
-			refreshTable()
-		}
-	})
 
 	downloadOrdersBtn := widget.NewButton("Download Orders", func() {
 		// Create dialog with file save picker
@@ -738,6 +668,8 @@ func initializeMainApp(myWindow fyne.Window, db *sql.DB) {
 		dialog.Show()
 	})
 
+	completeBtn := widget.NewButton("Mark Complete", func() {})
+
 	split := container.NewHSplit(
 		form,
 		container.NewBorder(
@@ -746,7 +678,6 @@ func initializeMainApp(myWindow fyne.Window, db *sql.DB) {
 				completeBtn,
 				downloadOrdersBtn,
 			),
-			// completeBtn,
 			nil,
 			nil,
 			orderTable,
@@ -755,6 +686,51 @@ func initializeMainApp(myWindow fyne.Window, db *sql.DB) {
 	split.SetOffset(0.03)
 
 	myWindow.SetContent(split)
+	orderTable.OnSelected = func(id widget.TableCellID) {
+		if id.Row > 0 {
+			orders, _ := internal.LoadOrders(db)
+			order := orders[id.Row-1]
+
+			editBtn := widget.NewButton("Edit", func() {
+				showEditOrderDialog(myWindow, db, order, refreshTable)
+			})
+
+			completeBtn.OnTapped = func() {
+				_, err := db.Exec("UPDATE orders SET completed = true WHERE id = ?", order.ID)
+				if err != nil {
+					dialog.ShowError(err, myWindow)
+					return
+				}
+				refreshTable()
+			}
+
+			actions := container.NewHBox(
+				editBtn,
+				completeBtn,
+				downloadOrdersBtn,
+			)
+
+			content := container.NewHSplit(
+				form,
+				container.NewBorder(
+					nil,
+					actions,
+					// container.NewHBox(
+					// 	completeBtn,
+					// 	downloadOrdersBtn,
+					// ),
+					// completeBtn,
+					nil,
+					nil,
+					orderTable,
+				),
+			)
+
+			content.SetOffset(0.03)
+			myWindow.SetContent(content)
+		}
+	}
+
 	myWindow.Resize(fyne.NewSize(1024, 768))
 
 	// Initial table load
@@ -764,8 +740,6 @@ func initializeMainApp(myWindow fyne.Window, db *sql.DB) {
 	myWindow.SetOnClosed(func() {
 		db.Close()
 	})
-
-	// myWindow.ShowAndRun()
 }
 
 func exportOrdersToExcel(db *sql.DB, filePath string) error {
@@ -773,22 +747,23 @@ func exportOrdersToExcel(db *sql.DB, filePath string) error {
 	query := `
         SELECT
             o.id,
+            r.name as representative_name,
+            o.completed,
             o.created_at,
-            o.due_date,
             o.client_name,
             o.contact,
+            o.due_date,
             p.name as product_name,
-            o.quantity,
-            o.price,
-            o.needs_delivery,
-            o.delivery_address,
-            o.comment,
-            o.completed,
-            r.name as representative_name
+            oi.quantity,
+            p.price as product_price,
+            oi.price as item_price,
+            o.total_price,
+            o.comment
         FROM orders o
-        LEFT JOIN products p ON o.product_id = p.id
         LEFT JOIN representatives r ON o.representative_id = r.id
-        ORDER BY o.created_at DESC
+        LEFT JOIN order_items oi ON o.id = oi.order_id
+        LEFT JOIN products p ON oi.product_id = p.id
+        ORDER BY o.created_at DESC, o.id, p.name
     `
 
 	rows, err := db.Query(query)
@@ -805,18 +780,18 @@ func exportOrdersToExcel(db *sql.DB, filePath string) error {
 	// Define headers
 	headers := []string{
 		"Order ID",
+		"Representative",
+		"Status",
 		"Date",
-		"Due Date",
 		"Client Name",
 		"Contact",
-		"Product",
-		"Quantity",
-		"Total Price",
-		"Needs Delivery",
-		"Delivery Address",
+		"Due Date",
+		"Product Name",
+		"Product Quantity",
+		"Product Unit Price",
+		"Product Total",
+		"Total Order Price",
 		"Comment",
-		"Status",
-		"Representative",
 	}
 
 	// Write headers
@@ -825,42 +800,42 @@ func exportOrdersToExcel(db *sql.DB, filePath string) error {
 		f.SetCellValue(sheetName, col+"1", header)
 
 		// Set column width based on content
-		f.SetColWidth(sheetName, col, col, 15)
+		f.SetColWidth(sheetName, col, col, 13)
 	}
 
 	// Write data rows
 	rowIndex := 2
 	for rows.Next() {
 		var (
-			id            int64
-			createdAt     time.Time
-			dueDate       time.Time
-			clientName    string
-			contact       string
-			productName   string
-			quantity      int
-			price         float64
-			needsDelivery bool
-			deliveryAddr  sql.NullString
-			comment       sql.NullString
-			completed     bool
-			repName       sql.NullString
+			id           int64
+			repName      sql.NullString
+			completed    bool
+			createdAt    time.Time
+			clientName   string
+			contact      string
+			dueDate      time.Time
+			productName  sql.NullString
+			quantity     sql.NullInt64
+			itemPrice    sql.NullFloat64
+			productPrice sql.NullFloat64
+			totalPrice   float64
+			comment      sql.NullString
 		)
 
 		err := rows.Scan(
 			&id,
+			&repName,
+			&completed,
 			&createdAt,
-			&dueDate,
 			&clientName,
 			&contact,
+			&dueDate,
 			&productName,
 			&quantity,
-			&price,
-			&needsDelivery,
-			&deliveryAddr,
+			&itemPrice,
+			&productPrice,
+			&totalPrice,
 			&comment,
-			&completed,
-			&repName,
 		)
 		if err != nil {
 			return fmt.Errorf("error scanning row: %w", err)
@@ -875,18 +850,18 @@ func exportOrdersToExcel(db *sql.DB, filePath string) error {
 		// Write row data
 		rowData := []interface{}{
 			id,
+			repName.String,
+			status,
 			createdAt.Format("2006-01-02 15:04"),
-			dueDate.Format("2006-01-02"),
 			clientName,
 			contact,
-			productName,
-			quantity,
-			fmt.Sprintf("R%.2f", price),
-			needsDelivery,
-			deliveryAddr.String,
+			dueDate.Format("2006-01-02"),
+			productName.String,
+			quantity.Int64,
+			fmt.Sprintf("R%.2f", itemPrice.Float64),
+			fmt.Sprintf("R%.2f", productPrice.Float64),
+			fmt.Sprintf("R%.2f", totalPrice),
 			comment.String,
-			status,
-			repName.String,
 		}
 
 		for i, value := range rowData {
@@ -896,7 +871,7 @@ func exportOrdersToExcel(db *sql.DB, filePath string) error {
 		rowIndex++
 	}
 
-	// Apply some styling
+	// Apply styling
 	style, err := f.NewStyle(&excelize.Style{
 		Font: &excelize.Font{
 			Bold: true,
@@ -914,7 +889,6 @@ func exportOrdersToExcel(db *sql.DB, filePath string) error {
 
 	// Auto-filter for all columns
 	lastCol, _ := excelize.ColumnNumberToName(len(headers))
-	// f.AutoFilter(sheetName, "A1", fmt.Sprintf("%s%d", lastCol, rowIndex-1), nil)
 	ref := fmt.Sprintf("A1:%s%d", lastCol, rowIndex-1)
 	f.AutoFilter(sheetName, ref, []excelize.AutoFilterOptions{})
 
@@ -924,4 +898,258 @@ func exportOrdersToExcel(db *sql.DB, filePath string) error {
 	}
 
 	return nil
+}
+
+type OrderItemEntry struct {
+	ProductSelect *widget.Select
+	QuantityEntry *widget.Entry
+	PriceLabel    *widget.Label
+	DeleteButton  *widget.Button
+}
+
+func showEditOrderDialog(window fyne.Window, db *sql.DB, order internal.Order, refreshTable func()) {
+	nameEntry := widget.NewEntry()
+	nameEntry.SetText(order.ClientName)
+
+	contactEntry := widget.NewEntry()
+	contactEntry.SetText(order.Contact)
+
+	dueDatePicker := widget.NewEntry()
+	dueDatePicker.SetText(order.DueDate.Format("2006-01-02"))
+
+	commentEntry := widget.NewMultiLineEntry()
+	commentEntry.SetText(order.Comment)
+
+	representatives, err := internal.LoadRepresentatives(db)
+	if err != nil {
+		dialog.ShowError(err, window)
+		return
+	}
+
+	var repNames []string
+	for _, r := range representatives {
+		repNames = append(repNames, r.Name)
+	}
+
+	repSelect := widget.NewSelect(repNames, nil)
+	for _, r := range representatives {
+		if r.ID == order.RepresentativeID {
+			repSelect.SetSelected(r.Name)
+			break
+		}
+	}
+
+	var orderItems []internal.OrderItem = order.Items
+	itemsButton := widget.NewButton("Manage Items", func() {
+		products, err := internal.LoadProducts(db)
+		if err != nil {
+			dialog.ShowError(err, window)
+			return
+		}
+		showOrderItemsDialog(window, products, orderItems, func(items []internal.OrderItem) {
+			orderItems = items
+		})
+	})
+
+	content := container.NewVBox(
+		repSelect,
+		nameEntry,
+		contactEntry,
+		dueDatePicker,
+		itemsButton,
+		commentEntry,
+	)
+
+	dialog := dialog.NewCustomConfirm(
+		"Edit Order",
+		"Save",
+		"Cancel",
+		content,
+		func(submit bool) {
+			if !submit {
+				return
+			}
+
+			dueDate, err := time.Parse("2006-01-02", dueDatePicker.Text)
+			if err != nil {
+				dialog.ShowError(fmt.Errorf("Invalid due date format. Please use YYYY-MM-DD"), window)
+				return
+			}
+
+			var repID int64
+			for _, r := range representatives {
+				if r.Name == repSelect.Selected {
+					repID = r.ID
+					break
+				}
+			}
+
+			// Calculate total price
+			var totalPrice float64
+			for _, item := range orderItems {
+				totalPrice += item.Price
+			}
+
+			// Update order
+			updatedOrder := internal.Order{
+				ID:               order.ID,
+				DueDate:          dueDate,
+				ClientName:       nameEntry.Text,
+				Contact:          contactEntry.Text,
+				RepresentativeID: repID,
+				Comment:          commentEntry.Text,
+				TotalPrice:       totalPrice,
+				Items:            orderItems,
+			}
+
+			if err := internal.EditOrder(db, updatedOrder); err != nil {
+				dialog.ShowError(err, window)
+				return
+			}
+
+			refreshTable()
+		},
+		window,
+	)
+
+	dialog.Resize(fyne.NewSize(600, 500))
+	dialog.Show()
+}
+
+func showOrderItemsDialog(window fyne.Window, products []internal.Product,
+	currentItems []internal.OrderItem, onSave func([]internal.OrderItem)) {
+
+	var itemEntries []struct {
+		ProductSelect *widget.Select
+		QuantityEntry *widget.Entry
+		PriceLabel    *widget.Label
+		Container     *fyne.Container
+	}
+
+	itemsContainer := container.NewVBox()
+	totalLabel := widget.NewLabel("Total: R0.00")
+
+	updateTotalPrice := func() {
+		var total float64
+		for _, entry := range itemEntries {
+			if entry.ProductSelect.Selected != "" {
+				quantity, _ := strconv.Atoi(entry.QuantityEntry.Text)
+				for _, p := range products {
+					if p.Name == entry.ProductSelect.Selected {
+						itemTotal := p.Price * float64(quantity)
+						total += itemTotal
+						entry.PriceLabel.SetText(fmt.Sprintf("Price: R%.2f", itemTotal))
+						break
+					}
+				}
+			}
+		}
+		totalLabel.SetText(fmt.Sprintf("Total: R%.2f", total))
+	}
+
+	addItemEntry := func() {
+		entry := struct {
+			ProductSelect *widget.Select
+			QuantityEntry *widget.Entry
+			PriceLabel    *widget.Label
+			Container     *fyne.Container
+		}{
+			ProductSelect: widget.NewSelect(nil, nil),
+			QuantityEntry: widget.NewEntry(),
+			PriceLabel:    widget.NewLabel("Price: R0.00"),
+		}
+
+		var productNames []string
+		for _, p := range products {
+			productNames = append(productNames, p.Name)
+		}
+		entry.ProductSelect.Options = productNames
+
+		entry.QuantityEntry.SetPlaceHolder("Quantity")
+
+		entry.ProductSelect.OnChanged = func(string) {
+			updateTotalPrice()
+		}
+
+		entry.QuantityEntry.OnChanged = func(string) {
+			updateTotalPrice()
+		}
+
+		deleteBtn := widget.NewButton("X", func() {
+			index := -1
+			for i, e := range itemEntries {
+				if e.ProductSelect == entry.ProductSelect {
+					index = i
+					break
+				}
+			}
+			if index >= 0 {
+				itemEntries = append(itemEntries[:index], itemEntries[index+1:]...)
+				itemsContainer.Remove(entry.Container)
+				updateTotalPrice()
+			}
+		})
+
+		entry.Container = container.NewHBox(
+			container.NewGridWithRows(1,
+				entry.ProductSelect,
+				entry.QuantityEntry,
+				entry.PriceLabel,
+				deleteBtn,
+			),
+		)
+
+		itemEntries = append(itemEntries, entry)
+		itemsContainer.Add(entry.Container)
+	}
+
+	// Add existing items
+	for _, item := range currentItems {
+		addItemEntry()
+		lastEntry := itemEntries[len(itemEntries)-1]
+		for _, p := range products {
+			if p.ID == item.ProductID {
+				lastEntry.ProductSelect.SetSelected(p.Name)
+				break
+			}
+		}
+		lastEntry.QuantityEntry.SetText(fmt.Sprintf("%d", item.Quantity))
+	}
+
+	addButton := widget.NewButton("Add Item", addItemEntry)
+
+	saveBtn := widget.NewButton("Save", func() {
+		var items []internal.OrderItem
+		for _, entry := range itemEntries {
+			if entry.ProductSelect.Selected != "" {
+				quantity, _ := strconv.Atoi(entry.QuantityEntry.Text)
+				var productID int64
+				var price float64
+				for _, p := range products {
+					if p.Name == entry.ProductSelect.Selected {
+						productID = p.ID
+						price = p.Price * float64(quantity)
+						break
+					}
+				}
+				items = append(items, internal.OrderItem{
+					ProductID: productID,
+					Quantity:  quantity,
+					Price:     price,
+				})
+			}
+		}
+		onSave(items)
+	})
+
+	content := container.NewVBox(
+		itemsContainer,
+		addButton,
+		totalLabel,
+		saveBtn,
+	)
+
+	dialog := dialog.NewCustom("Order Items", "Close", content, window)
+	dialog.Resize(fyne.NewSize(600, 400))
+	dialog.Show()
 }
