@@ -23,10 +23,10 @@ Before running the application, you need to set up your Turso database:
 
 ## Installation
 
-### Pre-built Binaries
+~~### Pre-built Binaries
 Pre-built binaries are available for download in the [here](https://github.com/reinhardt-bit/Blissful-Bites-Manager/tree/main/build). Choose the appropriate version for your operating system:
 - Windows (64-bit)
-- Linux (64-bit)
+- Linux (64-bit)~~
 
 ### Running the Application
 
