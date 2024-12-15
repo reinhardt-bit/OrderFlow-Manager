@@ -715,11 +715,6 @@ func initializeMainApp(myWindow fyne.Window, db *sql.DB) {
 				container.NewBorder(
 					nil,
 					actions,
-					// container.NewHBox(
-					// 	completeBtn,
-					// 	downloadOrdersBtn,
-					// ),
-					// completeBtn,
 					nil,
 					nil,
 					orderTable,
