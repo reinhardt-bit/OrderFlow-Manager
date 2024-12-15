@@ -1,4 +1,4 @@
-.env
-samoosa-tracker/
 .gitignore
 build.sh
+FyneApp.toml
+Icon.png
