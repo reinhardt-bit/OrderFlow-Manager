@@ -614,18 +614,13 @@ func initializeMainApp(myWindow fyne.Window, db *sql.DB) {
 				}
 			}
 		}
+		orderTable.Refresh()
 	}
 
 	// Add new order button
 	addOrderBtn := widget.NewButton("+", func() {
 		showAddOrderDialog(myWindow, db, refreshTable)
 	})
-
-	// Create the layout
-	form := container.NewVBox(
-		widget.NewLabel("Orders"),
-		addOrderBtn,
-	)
 
 	downloadOrdersBtn := widget.NewButton("Download Orders", func() {
 		// Create dialog with file save picker
@@ -669,31 +664,43 @@ func initializeMainApp(myWindow fyne.Window, db *sql.DB) {
 	})
 
 	completeBtn := widget.NewButton("Mark Complete", func() {})
+	editBtn := widget.NewButton("Edit", func() {})
 
-	split := container.NewHSplit(
+	actions := container.NewHBox(
+		editBtn,
+		completeBtn,
+		downloadOrdersBtn,
+	)
+
+	// Create the layout
+	form := container.NewVBox(
+		widget.NewLabel("Orders"),
+		addOrderBtn,
+	)
+
+	content := container.NewHSplit(
 		form,
 		container.NewBorder(
 			nil,
-			container.NewHBox(
-				completeBtn,
-				downloadOrdersBtn,
-			),
+			actions,
 			nil,
 			nil,
 			orderTable,
 		),
 	)
-	split.SetOffset(0.03)
 
-	myWindow.SetContent(split)
+	content.SetOffset(0.03)
+	myWindow.SetContent(content)
+
 	orderTable.OnSelected = func(id widget.TableCellID) {
 		if id.Row > 0 {
 			orders, _ := internal.LoadOrders(db)
 			order := orders[id.Row-1]
 
-			editBtn := widget.NewButton("Edit", func() {
+			// Update button actions instead of creating new buttons
+			editBtn.OnTapped = func() {
 				showEditOrderDialog(myWindow, db, order, refreshTable)
-			})
+			}
 
 			completeBtn.OnTapped = func() {
 				_, err := db.Exec("UPDATE orders SET completed = true WHERE id = ?", order.ID)
@@ -704,25 +711,6 @@ func initializeMainApp(myWindow fyne.Window, db *sql.DB) {
 				refreshTable()
 			}
 
-			actions := container.NewHBox(
-				editBtn,
-				completeBtn,
-				downloadOrdersBtn,
-			)
-
-			content := container.NewHSplit(
-				form,
-				container.NewBorder(
-					nil,
-					actions,
-					nil,
-					nil,
-					orderTable,
-				),
-			)
-
-			content.SetOffset(0.03)
-			myWindow.SetContent(content)
 		}
 	}
 
