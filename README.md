@@ -25,8 +25,8 @@ Before running the application, you need to set up your Turso database:
 
 ### Pre-built Binaries
 Pre-built binaries are available for download in the release area. Choose the appropriate version for your operating system:
-- [Windows (64-bit)](https://github.com/reinhardt-bit/Blissful-Bites-Manager/releases/download/windows-v0.1.0/BlissfulBytesManagement-windows-amd64.exe)
-- [Linux (64-bit)](https://github.com/reinhardt-bit/Blissful-Bites-Manager/releases/download/latest/BlissfulBytesManagement-linux-amd64)
+- [Windows (64-bit)](https://github.com/reinhardt-bit/Blissful-Bites-Manager/releases/download/v0.1.1/BlissfulBytesManagement-windows-amd64.exe)
+- [Linux (64-bit)](https://github.com/reinhardt-bit/Blissful-Bites-Manager/releases/download/linux-v0.1.1/BlissfulBytesManagement-linux-amd64)
 
 ### Running the Application
 
