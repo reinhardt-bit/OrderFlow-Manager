@@ -1,6 +1,6 @@
-# Blissful Bytes Manager
+# OrderFlow Manager
 
-A desktop application for managing orders, products, and representatives for Blissful Bytes.
+A desktop application for managing orders, products, and representatives.
 
 ## Prerequisites
 
@@ -25,16 +25,16 @@ Before running the application, you need to set up your Turso database:
 
 ### Pre-built Binaries
 Pre-built binaries are available for download in the release area. Choose the appropriate version for your operating system:
-- [Windows (64-bit)](https://github.com/reinhardt-bit/Blissful-Bites-Manager/releases/download/v0.1.1/BlissfulBytesManagement-windows-amd64.exe)
-- [Linux (64-bit)](https://github.com/reinhardt-bit/Blissful-Bites-Manager/releases/download/linux-v0.1.1/BlissfulBytesManagement-linux-amd64)
+- [Windows (64-bit)](https://github.com/reinhardt-bit/Blissful-Bites-Manager/releases/download/v0.1.2/orderflow-manager-windows-amd64.exe)
+- [Linux (64-bit)](https://github.com/reinhardt-bit/Blissful-Bites-Manager/releases/download/linux-v0.1.2/orderflow-manager-linux-amd64)
 
 ### Running the Application
 
 1. Download and extract the application package for your platform
 
 2. Launch the application
-   (NB. For linux you have to make it execurable first with chmod +x 'lacation of download'/BlissfulBytesManagement-linux-amd64
-    There after run it with ./'lacation of download'/BlissfulBytesManagement-linux-amd64)
+   (NB. For linux you have to make it execurable first with chmod +x 'lacation of download'/orderflow-manager-linux-amd64
+    There after run it with ./'lacation of download'/orderflow-manager-linux-amd64)
 
 3. On first launch, you'll be prompted to enter your Turso database credentials:
    - Enter your Database URL
@@ -71,4 +71,4 @@ For bug reports and feature requests, please open an issue in the GitHub reposit
 
 ## License
 
-[MIT](https://github.com/reinhardt-bit/Order-Tracker?tab=MIT-1-ov-file#readme)
+[MIT](https://github.com/reinhardt-bit/OrderFlow-Manager?tab=MIT-1-ov-file#readme)
