@@ -1,2 +1,0 @@
-build/BlissfulBytesManagement-linux-amd64 filter=lfs diff=lfs merge=lfs -text
-build/BlissfulBytesManagement-windows-amd64.exe filter=lfs diff=lfs merge=lfs -text
