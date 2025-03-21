@@ -22,8 +22,8 @@ func TestGetConfigFilePath(t *testing.T) {
 
 	// Check that the parent directory is BlissfulBytesManagement
 	parentDir := filepath.Base(filepath.Dir(path))
-	if parentDir != "OrderFlow-Manager" {
-		t.Errorf("Expected parent directory to be OrderFlow-Manager, got %s", parentDir)
+	if parentDir != "BlissfulBytesManagement" {
+		t.Errorf("Expected parent directory to be BlissfulBytesManagement, got %s", parentDir)
 	}
 }
 
