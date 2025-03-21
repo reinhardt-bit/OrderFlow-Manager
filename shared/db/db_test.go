@@ -224,12 +224,12 @@ func contains(s, substr string) bool {
 // This test would require mocking the libsql driver, which is beyond the scope of a simple unit test
 // Instead, we can test the connection string construction separately
 
-// TestConnectionStringConstruction tests that the connection string is properly constructed
-func TestConnectionStringConstruction(t *testing.T) {
-	// Skip actual connection test
-	t.Skip("Testing connection string construction requires refactoring db.go to expose internal functions")
-
-	// Note: This test would require refactoring db.go to expose the connection string
-	// construction logic as a separate function that can be tested independently.
-	// For now, this is just a placeholder to indicate what should be tested.
-}
+//// TestConnectionStringConstruction tests that the connection string is properly constructed
+// func TestConnectionStringConstruction(t *testing.T) {
+//	// Skip actual connection test
+//	t.Skip("Testing connection string construction requires refactoring db.go to expose internal functions")
+//
+//	// Note: This test would require refactoring db.go to expose the connection string
+//	// construction logic as a separate function that can be tested independently.
+//	// For now, this is just a placeholder to indicate what should be tested.
+// }
