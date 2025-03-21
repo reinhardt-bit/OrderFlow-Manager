@@ -1,4 +1,4 @@
-[![Go Coverage](https://github.com/USER/REPO/wiki/coverage.svg)](https://raw.githack.com/wiki/USER/REPO/coverage.html)
+[![Go Coverage](https://github.com/USER/REPO/wiki/coverage.svg)](https://raw.githack.com/wiki/USER/REPO/coverage.html)  [![HitCount](https://hits.dwyl.com/reinhardt-bit/{project}.svg?style=flat-square)](http://hits.dwyl.com/reinhardt-bit/{project})
 
 # OrderFlow Manager
 
