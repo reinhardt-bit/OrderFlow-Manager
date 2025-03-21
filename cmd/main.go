@@ -2,14 +2,15 @@
 package main
 
 import (
-	"blissfulBytes-manager/internal"
-	"blissfulBytes-manager/shared/db"
 	"database/sql"
 	"fmt"
 	"log"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/reinhardt-bit/OrderFlow-Manager/internal"
+	"github.com/reinhardt-bit/OrderFlow-Manager/shared/db"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -22,8 +23,8 @@ import (
 )
 
 func main() {
-	myApp := app.NewWithID("com.blissfulbytes.manager")
-	myWindow := myApp.NewWindow("Blissful Bites Manager")
+	myApp := app.NewWithID("com.orderflow.manager")
+	myWindow := myApp.NewWindow("OrderFlow Manager")
 
 	// Update environment variables from config file
 	if err := db.UpdateEnvForDbConfig(); err != nil {
@@ -1136,3 +1137,4 @@ func showOrderItemsDialog(window fyne.Window, products []internal.Product,
 	dialog.Resize(fyne.NewSize(600, 400))
 	dialog.Show()
 }
+
