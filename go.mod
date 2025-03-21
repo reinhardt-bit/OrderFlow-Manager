@@ -1,9 +1,11 @@
-module blissfulBytes-manager
+module github.com/reinhardt-bit/OrderFlow-Manager
 
-go 1.23
+go 1.23.4
 
 require (
 	fyne.io/fyne/v2 v2.5.2
+	github.com/DATA-DOG/go-sqlmock v1.5.2
+	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/tursodatabase/libsql-client-go v0.0.0-20240902231107-85af5b9d094d
 	github.com/xuri/excelize/v2 v2.9.0
 )
@@ -48,3 +50,4 @@ require (
 	golang.org/x/text v0.19.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
