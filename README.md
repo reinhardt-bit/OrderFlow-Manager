@@ -1,3 +1,5 @@
+[![Go Coverage](https://github.com/USER/REPO/wiki/coverage.svg)](https://raw.githack.com/wiki/USER/REPO/coverage.html)
+
 # OrderFlow Manager
 
 A desktop application for managing orders, products, and representatives.
