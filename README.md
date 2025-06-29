@@ -1,4 +1,4 @@
-[![HitCount](https://hits.dwyl.com/reinhardt-bit/OrderFlow-Manager.svg?style=flat-square)](http://hits.dwyl.com/reinhardt-bit/OrderFlow-Manager)
+  [![HitCount](https://hits.dwyl.com/reinhardt-bit/OrderFlow-Manager.svg?style=flat)](http://hits.dwyl.com/reinhardt-bit/OrderFlow-Manager)
 
 # OrderFlow Manager
 
